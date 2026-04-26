@@ -1,0 +1,48 @@
+services:
+
+    proxy:
+        image: nginx
+        ports:
+            - '1883:1883'
+            - '8080:8080'
+            - '8443:8443'
+        volumes:
+            - ./nginx.conf:/etc/nginx/nginx.conf
+
+    postgres:
+        image: postgres:18
+        environment:
+            POSTGRES_PASSWORD: secret
+        ports:
+            - '5432:5432'
+        volumes:
+            - pgdata:/var/lib/postgresql/18/docker
+            # - ./initdb.d:/docker-entrypoint-initdb.d
+
+    flyway:
+        image: flyway/flyway:12-alpine
+        command: migrate
+        volumes:
+            - ./flyway.conf:/flyway/conf/flyway.conf
+            - ./migrations:/flyway/sql
+
+    silo1:
+        build: .
+        environment:
+            ASPNETCORE_URLS: http://+:8080
+        ports:
+            - '8081:8080'
+
+    silo2:
+        build: .
+        environment:
+            ASPNETCORE_URLS: http://+:8080
+        ports:
+            - '8082:8080'
+
+
+    silo3:
+        build: .
+
+volumes:
+    pgdata:
