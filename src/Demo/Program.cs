@@ -1,10 +1,9 @@
 ﻿
-using Application;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MQTTnet;
 using MQTTnet.Client;
-using MQTTnet.Extensions.ManagedClient;
+using MQTTnet.Protocol;
 
 var builder = Host.CreateApplicationBuilder();
 // builder.Services.AddOrleansClient(options =>
@@ -30,21 +29,23 @@ internal sealed class Worker : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        var options = new ManagedMqttClientOptionsBuilder()
-            .WithAutoReconnectDelay(TimeSpan.FromSeconds(5))
-            .WithClientOptions(new MqttClientOptionsBuilder()
-                .WithClientId("Client1")
-                .WithConnectionUri("ws://localhost:8080/mqtt")
-                .Build())
+        var options = new MqttClientOptionsBuilder()
+            .WithClientId("foo")
+            .WithConnectionUri("ws://localhost:8081/mqtt")
             .Build();
 
-        using var mqttClient = new MqttFactory().CreateManagedMqttClient();
-        await mqttClient.SubscribeAsync([new MqttTopicFilterBuilder().WithTopic("my/topic").Build()]);
-        await mqttClient.StartAsync(options);
-
+        using var mqttClient = new MqttFactory().CreateMqttClient();
+        await mqttClient.ConnectAsync(options);
         while (!cancellationToken.IsCancellationRequested)
         {
-            await mqttClient.EnqueueAsync("World");
+            Console.WriteLine("Publishing Message");
+            await mqttClient.PublishStringAsync(
+                topic: "hello",
+                payload: "Demo",
+                MqttQualityOfServiceLevel.AtLeastOnce,
+                retain: false,
+                cancellationToken);
+            Console.WriteLine("Message Published");
             await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
         }
     }

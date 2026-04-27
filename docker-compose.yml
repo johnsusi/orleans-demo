@@ -19,17 +19,28 @@ services:
             - pgdata:/var/lib/postgresql/18/docker
             # - ./initdb.d:/docker-entrypoint-initdb.d
 
-    flyway:
+    migrate-postgres:
         image: flyway/flyway:12-alpine
         command: migrate
         volumes:
-            - ./flyway.conf:/flyway/conf/flyway.conf
-            - ./migrations:/flyway/sql
+            - ./migrations/postgres/flyway.conf:/flyway/conf/flyway.conf
+            - ./migrations/postgresql:/flyway/sql
+
+    migrate-sqlite:
+        image: flyway/flyway:12-alpine
+        command: migrate
+        volumes:
+            - ./migrations/sqlite/flyway.conf:/flyway/conf/flyway.conf
+            - ./migrations/sqlite:/flyway/sql
+            - ./src/Host/:/host
 
     silo1:
         build: .
         environment:
             ASPNETCORE_URLS: http://+:8080
+            Orleans_UseClustering: ado
+            Orleans__Invariant: Npgsql
+            Orleans__ConnectionString: "Host=postgres;Database=demo;Username=postgres;Password=secret"
         ports:
             - '8081:8080'
 
@@ -37,12 +48,22 @@ services:
         build: .
         environment:
             ASPNETCORE_URLS: http://+:8080
+            Orleans_UseClustering: ado
+            Orleans__Invariant: Npgsql
+            Orleans__ConnectionString: "Host=postgres;Database=demo;Username=postgres;Password=secret"
         ports:
             - '8082:8080'
 
 
     silo3:
         build: .
+        environment:
+            ASPNETCORE_URLS: http://+:8080
+            Orleans_UseClustering: ado
+            Orleans__Invariant: Npgsql
+            Orleans__ConnectionString: "Host=postgres;Database=demo;Username=postgres;Password=secret"
+        ports:
+            - '8083:8080'
 
 volumes:
     pgdata:

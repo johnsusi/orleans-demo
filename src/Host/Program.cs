@@ -1,5 +1,5 @@
+using Application;
 using MQTTnet.AspNetCore;
-using MQTTnet.Protocol;
 using Orleans.Dashboard;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,11 +8,21 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddOrleans(silo =>
 {
-    silo.UseAdoNetClustering(clustering =>
+    var orleans = builder.Configuration.GetSection("Orleans");
+    if (orleans["UseClustering"] == "ado")
+        silo.UseAdoNetClustering(clustering =>
+        {
+            clustering.Invariant = orleans["Invariant"];
+            clustering.ConnectionString = orleans["ConnectionString"];
+            // clustering.Invariant = "Npgsql";
+            // clustering.ConnectionString = "Host=postgres;Database=demo;Username=postgres;Password=secret";
+        });
+    else
+        silo.UseLocalhostClustering();
+    silo.AddAdoNetGrainStorage("helloStore", storage =>
     {
-        clustering.Invariant = "Npgsql";
-        clustering.ConnectionString = "Host=postgres;Database=demo;Username=postgres;Password=secret";
-
+        storage.Invariant = orleans["Invariant"];
+        storage.ConnectionString = orleans["ConnectionString"];
     });
     silo.Services.AddSingleton<PlacementStrategy, PreferLocalPlacement>();
     silo.AddDashboard();
@@ -34,86 +44,57 @@ app.MapOrleansDashboard();
 
 app.MapMqtt("/mqtt");
 
+var grainFactory = app.Services.GetRequiredService<IGrainFactory>();
+
 app.UseMqttServer(
     server =>
     {
 
-        server.ApplicationMessageEnqueuedOrDroppedAsync += args =>
+        server.ClientConnectedAsync += async args =>
         {
-            return Task.CompletedTask;
-        };
-        server.LoadingRetainedMessageAsync += args =>
-        {
-            app.Logger.LogInformation("LoadingRetainedMessageAsync");
-            return Task.CompletedTask;
-        };
-
-        server.RetainedMessageChangedAsync += args =>
-        {
-            app.Logger.LogInformation("RetainedMessageChangedAsync");
-            return Task.CompletedTask;
+            try
+            {
+                app.Logger.LogInformation("ClientConnectedAsync: {client}", args.ClientId);
+                var grain = grainFactory.GetGrain<IHelloGrain>($"hello/{args.ClientId}");
+                await grain.Connect();
+            }
+            catch (Exception err)
+            {
+                app.Logger.LogError(err, "Connected");
+            }
         };
 
-        server.ValidatingConnectionAsync += args =>
+        server.InterceptingPublishAsync += async args =>
         {
-            app.Logger.LogInformation("ValidatingConnectionAsync");
-            return Task.CompletedTask;
+            try
+            {
+                app.Logger.LogInformation("InterceptingPublishAsync: {client}: {topic}", args.ClientId, args.ApplicationMessage.Topic);
+                var grain = grainFactory.GetGrain<IHelloGrain>($"hello/{args.ApplicationMessage.Topic}");
+                await grain.Message(args.ClientId, args.CancellationToken);
+            }
+            catch (Exception err)
+            {
+                app.Logger.LogError(err, "Publish");
+            }
+
         };
 
-        server.ClientConnectedAsync += args =>
+        server.ClientDisconnectedAsync += async args =>
         {
-            app.Logger.LogInformation("ClientConnectedAsync");
-            return Task.CompletedTask;
+            try
+            {
+                app.Logger.LogInformation("ClientDisconnectedAsync: {client}", args.ClientId);
+                var grain = grainFactory.GetGrain<IHelloGrain>($"hello/{args.ClientId}");
+                await grain.Disconnect();
+            }
+            catch (Exception err)
+            {
+                app.Logger.LogError(err, "Disconnected");
+            }
+
         };
-
-        server.ClientDisconnectedAsync += args =>
-        {
-            app.Logger.LogInformation("ClientDisconnectedAsync");
-            return Task.CompletedTask;
-        };
-
-        server.ClientSubscribedTopicAsync += args =>
-        {
-            app.Logger.LogInformation("ClientSubscribedTopicAsync");
-            return Task.CompletedTask;
-        };
-
-        server.ClientUnsubscribedTopicAsync += args =>
-        {
-            app.Logger.LogInformation("ClientUnsubscribedTopicAsync");
-            return Task.CompletedTask;
-        };
-
-        server.InterceptingClientEnqueueAsync += args =>
-        {
-            app.Logger.LogInformation("InterceptingClientEnqueueAsync");
-            return Task.CompletedTask;
-        };
-
-        server.InterceptingPublishAsync += args =>
-        {
-            app.Logger.LogInformation("InterceptingPublishAsync: {client}: {topic}", args.ClientId, args.ApplicationMessage.Topic);
-            return Task.CompletedTask;
-        };
-
-        server.InterceptingSubscriptionAsync += args =>
-        {
-            app.Logger.LogInformation("InterceptingSubscriptionAsync");
-            args.Response.ReasonCode = MqttSubscribeReasonCode.NotAuthorized;
-
-            return Task.CompletedTask;
-        };
-
-        server.InterceptingUnsubscriptionAsync += args =>
-        {
-            app.Logger.LogInformation("InterceptingUnsubscriptionAsync");
-            return Task.CompletedTask;
-        };
-
 
     });
 
 app.Run();
-
-
 
