@@ -1,7 +1,5 @@
 -- Run this migration for upgrading the PostgreSQL clustering table and routines for deployments created before 3.6.0
 
-BEGIN;
-
 -- Change date type
 
 ALTER TABLE OrleansMembershipVersionTable
@@ -164,5 +162,3 @@ BEGIN
 
 END
 $func$ LANGUAGE plpgsql;
-
-COMMIT;

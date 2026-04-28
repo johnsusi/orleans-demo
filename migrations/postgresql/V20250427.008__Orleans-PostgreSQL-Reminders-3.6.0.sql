@@ -1,7 +1,5 @@
 -- Run this migration for upgrading the PostgreSQL reminder table and routines for deployments created before 3.6.0
 
-BEGIN;
-
 -- Change date type
 
 ALTER TABLE OrleansRemindersTable
@@ -54,5 +52,3 @@ BEGIN
 
 END
 $func$ LANGUAGE plpgsql;
-
-COMMIT;

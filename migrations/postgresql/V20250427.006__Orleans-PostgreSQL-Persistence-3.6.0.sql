@@ -1,7 +1,5 @@
 -- Run this migration for upgrading the PostgreSQL persistence table and routines for deployments created before 3.6.0
 
-BEGIN;
-
 -- Change date type
 
 ALTER TABLE OrleansStorage
@@ -125,5 +123,3 @@ AS $function$
 END
 
 $function$;
-
-COMMIT;

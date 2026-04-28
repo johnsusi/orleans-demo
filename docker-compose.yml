@@ -13,11 +13,17 @@ services:
         image: postgres:18
         environment:
             POSTGRES_PASSWORD: secret
+            POSTGRES_DB: demo
         ports:
             - '5432:5432'
         volumes:
             - pgdata:/var/lib/postgresql/18/docker
             # - ./initdb.d:/docker-entrypoint-initdb.d
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres -d demo"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
 
     migrate-postgres:
         image: flyway/flyway:12-alpine
@@ -25,6 +31,9 @@ services:
         volumes:
             - ./migrations/postgresql/flyway.conf:/flyway/conf/flyway.conf
             - ./migrations/postgresql:/flyway/sql
+        depends_on:
+            postgres:
+                condition: service_healthy
 
     migrate-sqlite:
         image: flyway/flyway:12-alpine
@@ -41,7 +50,7 @@ services:
         environment:
             ASPNETCORE_URLS: http://+:8080
             OTEL_SERVICE_NAME: silo1
-            OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:4317
             Orleans_UseClustering: ado
             Orleans__Invariant: Npgsql
             Orleans__ConnectionString: "Host=postgres;Database=demo;Username=postgres;Password=secret"
@@ -55,13 +64,12 @@ services:
         environment:
             ASPNETCORE_URLS: http://+:8080
             OTEL_SERVICE_NAME: silo2
-            OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:4317
             Orleans_UseClustering: ado
             Orleans__Invariant: Npgsql
             Orleans__ConnectionString: "Host=postgres;Database=demo;Username=postgres;Password=secret"
         ports:
             - '8082:8080'
-
 
     silo3:
         build:
@@ -70,7 +78,7 @@ services:
         environment:
             ASPNETCORE_URLS: http://+:8080
             OTEL_SERVICE_NAME: silo3
-            OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:4317
             Orleans_UseClustering: ado
             Orleans__Invariant: Npgsql
             Orleans__ConnectionString: "Host=postgres;Database=demo;Username=postgres;Password=secret"
@@ -99,6 +107,12 @@ services:
     #     volumes:
     #         - ./conf/otel-collector-config.yaml:/etc/otelcol/config.yaml
 
+    dashboard:
+        image: mcr.microsoft.com/dotnet/aspire-dashboard:9
+        environment:
+            DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: true
+        ports:
+            - '18888:18888'
 
 
 volumes:
