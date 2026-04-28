@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package domain;
+
+message DevicePropertyValue {
+    oneof value_oneof {
+        string stringValue = 1;
+        uint64 uintValue = 2;
+        double doubleValue = 3;
+    }
+}

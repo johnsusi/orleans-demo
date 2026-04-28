@@ -7,7 +7,7 @@ services:
             - '8080:8080'
             - '8443:8443'
         volumes:
-            - ./nginx.conf:/etc/nginx/nginx.conf
+            - ./conf/nginx.conf:/etc/nginx/nginx.conf
 
     postgres:
         image: postgres:18
@@ -21,23 +21,27 @@ services:
 
     migrate-postgres:
         image: flyway/flyway:12-alpine
-        command: migrate
+        command: migrate -locations="filesystem:./sql"
         volumes:
-            - ./migrations/postgres/flyway.conf:/flyway/conf/flyway.conf
+            - ./migrations/postgresql/flyway.conf:/flyway/conf/flyway.conf
             - ./migrations/postgresql:/flyway/sql
 
     migrate-sqlite:
         image: flyway/flyway:12-alpine
-        command: migrate
+        command: migrate -locations="filesystem:./sql"
         volumes:
             - ./migrations/sqlite/flyway.conf:/flyway/conf/flyway.conf
             - ./migrations/sqlite:/flyway/sql
             - ./src/Host/:/host
 
     silo1:
-        build: .
+        build:
+            context: .
+            dockerfile: src/Host/Dockerfile
         environment:
             ASPNETCORE_URLS: http://+:8080
+            OTEL_SERVICE_NAME: silo1
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
             Orleans_UseClustering: ado
             Orleans__Invariant: Npgsql
             Orleans__ConnectionString: "Host=postgres;Database=demo;Username=postgres;Password=secret"
@@ -45,9 +49,13 @@ services:
             - '8081:8080'
 
     silo2:
-        build: .
+        build:
+            context: .
+            dockerfile: src/Host/Dockerfile
         environment:
             ASPNETCORE_URLS: http://+:8080
+            OTEL_SERVICE_NAME: silo2
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
             Orleans_UseClustering: ado
             Orleans__Invariant: Npgsql
             Orleans__ConnectionString: "Host=postgres;Database=demo;Username=postgres;Password=secret"
@@ -56,14 +64,43 @@ services:
 
 
     silo3:
-        build: .
+        build:
+            context: .
+            dockerfile: src/Host/Dockerfile
         environment:
             ASPNETCORE_URLS: http://+:8080
+            OTEL_SERVICE_NAME: silo3
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
             Orleans_UseClustering: ado
             Orleans__Invariant: Npgsql
             Orleans__ConnectionString: "Host=postgres;Database=demo;Username=postgres;Password=secret"
         ports:
             - '8083:8080'
 
+
+    grafana:
+        image: grafana/grafana:13.0
+        ports:
+            - '3000:3000'
+
+    prometheus:
+        image: prom/prometheus:v3
+        command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+        ports:
+            - 9090:9090
+        
+        volumes:
+            - ./conf/prom.yaml:/etc/prometheus/prometheus.yml
+            - promdata:/prometheus
+
+    # collector:
+    #     image: otel/opentelemetry-collector:0.150.0
+    #     volumes:
+    #         - ./conf/otel-collector-config.yaml:/etc/otelcol/config.yaml
+
+
+
 volumes:
     pgdata:
+    promdata:

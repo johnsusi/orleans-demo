@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+
+  - job_name: silos
+    static_configs:
+      - targets: ["silo1:8080", "silo2:8080", "silo3:8080"]

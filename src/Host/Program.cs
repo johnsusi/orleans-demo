@@ -1,10 +1,21 @@
 using Application;
 using MQTTnet.AspNetCore;
+using OpenTelemetry.Metrics;
 using Orleans.Dashboard;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddMeter("Microsoft.AspNetCore.Hosting")
+        .AddMeter("Microsoft.AspNetCore.Server.Kestrel")
+        .AddMeter("System.Net.Http")
+        .AddMeter("System.Net.NameResolution")
+        .AddMeter("Microsoft.Orleans")
+        .AddPrometheusExporter());
+
 
 builder.Services.AddOrleans(silo =>
 {
@@ -14,8 +25,6 @@ builder.Services.AddOrleans(silo =>
         {
             clustering.Invariant = orleans["Invariant"];
             clustering.ConnectionString = orleans["ConnectionString"];
-            // clustering.Invariant = "Npgsql";
-            // clustering.ConnectionString = "Host=postgres;Database=demo;Username=postgres;Password=secret";
         });
     else
         silo.UseLocalhostClustering();
@@ -40,6 +49,7 @@ var app = builder.Build();
 
 app.UseRouting();
 
+app.MapPrometheusScrapingEndpoint();
 app.MapOrleansDashboard();
 
 app.MapMqtt("/mqtt");
