@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RockSolid.Foundation.Modeling;
 
 namespace Domain;
@@ -38,5 +39,15 @@ public sealed class Device(DeviceId deviceId) : AggregateRoot<Device, DeviceId>(
             _properties[name] = value;
             RaiseDomainEvent(new DevicePropertyAdded(Id, name, value));
         }
+    }
+}
+
+
+public sealed class DeviceEntityTypeConfiguration : IEntityTypeConfiguration<Device>
+{
+    public void Configure(EntityTypeBuilder<Device> builder)
+    {
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id);
     }
 }

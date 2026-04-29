@@ -9,3 +9,8 @@ message DevicePropertyValue {
         double doubleValue = 3;
     }
 }
+
+message DeviceTelemetry {    
+    string name = 1;
+    repeated DevicePropertyValue values = 2;
+}

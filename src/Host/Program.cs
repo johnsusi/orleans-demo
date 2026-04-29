@@ -1,5 +1,7 @@
 using Application;
+using Domain;
 using MQTTnet.AspNetCore;
+using MQTTnet.Protocol;
 using OpenTelemetry.Metrics;
 using Orleans.Dashboard;
 
@@ -60,27 +62,44 @@ app.UseMqttServer(
     server =>
     {
 
-        server.ClientConnectedAsync += async args =>
-        {
-            try
-            {
-                app.Logger.LogInformation("ClientConnectedAsync: {client}", args.ClientId);
-                var grain = grainFactory.GetGrain<IHelloGrain>($"hello/{args.ClientId}");
-                await grain.Connect();
-            }
-            catch (Exception err)
-            {
-                app.Logger.LogError(err, "Connected");
-            }
-        };
+        // server.ClientConnectedAsync += async args =>
+        // {
+        //     try
+        //     {
+        //         app.Logger.LogInformation("ClientConnectedAsync: {client}", args.ClientId);
+        //         var grain = grainFactory.GetGrain<IHelloGrain>($"hello/{args.ClientId}");
+        //         await grain.Connect();
+        //     }
+        //     catch (Exception err)
+        //     {
+        //         app.Logger.LogError(err, "Connected");
+        //     }
+        // };
 
         server.InterceptingPublishAsync += async args =>
         {
             try
             {
                 app.Logger.LogInformation("InterceptingPublishAsync: {client}: {topic}", args.ClientId, args.ApplicationMessage.Topic);
-                var grain = grainFactory.GetGrain<IHelloGrain>($"hello/{args.ApplicationMessage.Topic}");
-                await grain.Message(args.ClientId, args.CancellationToken);
+
+                var grain = grainFactory.GetGrain<IDeviceGrain>(Guid.Parse(args.ClientId));
+                if (args.ApplicationMessage.Topic == $"devices/{args.ClientId}/telemetry")
+                {
+                    try
+                    {
+                        var message = DeviceTelemetry.Parser.ParseFrom(args.ApplicationMessage.Payload);
+                        await grain.ReportTelemetryAsync(message, args.CancellationToken);
+                    }
+                    catch (Exception err)
+                    {
+                        app.Logger.LogError(err, "Unable to report telemetry");
+                        args.Response.ReasonCode = MqttPubAckReasonCode.PayloadFormatInvalid;
+                    }
+                }
+                else
+                {
+                    args.Response.ReasonCode = MqttPubAckReasonCode.NotAuthorized;
+                }
             }
             catch (Exception err)
             {
@@ -89,20 +108,20 @@ app.UseMqttServer(
 
         };
 
-        server.ClientDisconnectedAsync += async args =>
-        {
-            try
-            {
-                app.Logger.LogInformation("ClientDisconnectedAsync: {client}", args.ClientId);
-                var grain = grainFactory.GetGrain<IHelloGrain>($"hello/{args.ClientId}");
-                await grain.Disconnect();
-            }
-            catch (Exception err)
-            {
-                app.Logger.LogError(err, "Disconnected");
-            }
+        // server.ClientDisconnectedAsync += async args =>
+        // {
+        //     try
+        //     {
+        //         app.Logger.LogInformation("ClientDisconnectedAsync: {client}", args.ClientId);
+        //         var grain = grainFactory.GetGrain<IHelloGrain>($"hello/{args.ClientId}");
+        //         await grain.Disconnect();
+        //     }
+        //     catch (Exception err)
+        //     {
+        //         app.Logger.LogError(err, "Disconnected");
+        //     }
 
-        };
+        // };
 
     });
 

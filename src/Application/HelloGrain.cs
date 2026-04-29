@@ -1,52 +1,39 @@
-﻿using Microsoft.AspNetCore.Connections.Features;
-using Microsoft.Extensions.Logging;
+﻿using Domain;
 
 namespace Application;
 
-public interface IHelloGrain : IGrainWithStringKey
+public interface IDeviceGrain : IGrainWithGuidKey
 {
-    public Task Connect(CancellationToken cancellationToken = default);
-    public Task Message(string message, CancellationToken cancellationToken = default);
-    public Task Disconnect(CancellationToken cancellationToken = default);
-}
-
-public class HelloGrain : Grain, IHelloGrain
-{
-    private readonly ILogger _logger;
-    private readonly IPersistentState<HelloState> _state;
-
-    public HelloGrain(
-        ILogger<HelloGrain> logger,
-        [PersistentState("hello", "helloStore")] IPersistentState<HelloState> state)
-    {
-        _logger = logger;
-        _state = state;
-    }
-
-    public Task Connect(CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-
-    public async Task Message(string message, CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("Message: {} {}", message, _state.State.Value);
-        _state.State.Value += 1;
-        await _state.WriteStateAsync(cancellationToken);
-    }
-
-    public Task Disconnect(CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
+    public Task ReportTelemetryAsync(DeviceTelemetry message, CancellationToken cancellationToken);
 
 }
 
-
-[GenerateSerializer]
-public sealed record HelloState
+public class DeviceGrain : Grain, IDeviceGrain
 {
-    [Id(0)]
-    public int Value { get; set; } = 0;
+    private readonly ApplicationDbContext _db;
+    private Device? _device;
+
+    public DeviceGrain(ApplicationDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task ReportTelemetryAsync(DeviceTelemetry message, CancellationToken cancellationToken)
+    {
+        _device ??= await _db.Devices.FindAsync([this.GetPrimaryKey()]);
+
+        if (_device is null)
+        {
+            _device = new Device(new DeviceId(this.GetPrimaryKey()));
+            _db.Add(_device);
+        }
+
+        var name = new DevicePropertyName(message.Name);
+        foreach (var value in message.Values)
+
+            _device.SetProperty(name, value);
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
 
 }
